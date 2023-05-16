@@ -10,7 +10,15 @@ const app=express();
 const port= process.env.PORT || 5000
 
 ///Middleware
-app.use(cors())
+// app.use(cors())
+const corsConfig = {
+  origin: '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE']
+  }
+app.use(cors(corsConfig))
+
+
 app.use(express.json())
 
 app.get('/',(req,res)=>{
@@ -47,16 +55,72 @@ const client = new MongoClient(uri, {
   }
 });
 
+// const verifyJwt=(req,res,next)=>{
+//   console.log('Hitting verify JWT-1');
+//   console.log(req.headers.authorization);
+//   const authorization=req.headers.authorization;
+
+//   if(!authorization){
+//     return res.status(401).send({error:true, message: "unauthorized access"})
+//   }
+
+//   const token=authorization.split(' ')[1]
+  
+//   console.log('Token inside verify jwt: \n',token);
+//   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error,decoded)=>{
+//      if(error){
+//        res.status(403).send({error: true, message: 'not verified' })
+//      }
+//      req.decoded=decoded
+//      next()
+//   })
+
+// }
+
+const verifyJWT=(req,res,next)=>{
+  console.log('Verify Heating');
+  const authorization=req.headers.authorization;
+  if(!authorization){
+     return res.status(401).send({error: true, message: 'unauthorized'})
+  }
+  const token=authorization.split(' ')[1]
+  console.log('Token: ',token);
+
+  jwt.verify(token,process.env.ACCESS_TOKEN_SECRET, (err,decoded)=>{
+    if(err){
+      return res.status(401).send({error: true, message: 'Not Verified'})
+    }
+    req.decoded=decoded;
+    next();
+  })
+}
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    //await client.connect();
 
     //////Database Main work start
     const serviceCollection=client.db('carDoctor').collection('Services')
     const bookingCollection=client.db('carDoctor').collection('Bookings')
 
 
+    ///JWT
+
+    app.post('/jwt', (req,res)=>{
+      const user=req.body;
+      console.log(user);
+
+      const token=jwt.sign(user,process.env.ACCESS_TOKEN_SECRET,{
+        expiresIn: '1h'
+      })
+
+      console.log(token);
+      res.send({token})
+    })
+
+
+    ///Services routes
     app.get('/services', async(req,res)=>{
         const cursor=serviceCollection.find();
         const result=await cursor.toArray();
@@ -81,8 +145,8 @@ async function run() {
 
 
 
-    ///Bookings
-    app.post('/bookings',async(req,res)=>{
+    ///Bookings routes
+    app.post('/bookings', async(req,res)=>{
         const booking=req.body;
         console.log(booking);
 
@@ -96,8 +160,19 @@ async function run() {
     //     const result=await bookingCollection.find().toArray();
     //     res.send(result);
     // })
-    app.get('/bookings',async(req,res)=>{
-        console.log(req.query.email);
+
+
+    app.get('/bookings', verifyJWT, async(req,res)=>{
+       const decoded=req.decoded;
+       // console.log(req.headers.authorization);
+       console.log('Came back after verify',decoded);
+
+       ///Another Time verify
+       if(decoded.email!==req.query.email){
+         req.status(403).send({error: 1, message: 'forbidden access' })
+       }
+
+
         let query={}
         if(req.query?.email){
             query={email: req.query.email}
