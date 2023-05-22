@@ -14,7 +14,7 @@ const port= process.env.PORT || 5000
 const corsConfig = {
   origin: '*',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE']
+  methods: ['GET', 'POST', 'PUT', 'DELETE','PATCH']
   }
 app.use(cors(corsConfig))
 
@@ -122,8 +122,26 @@ async function run() {
 
     ///Services routes
     app.get('/services', async(req,res)=>{
-        const cursor=serviceCollection.find();
-        const result=await cursor.toArray();
+        // const cursor=serviceCollection.find();
+        // const result=await cursor.toArray();
+
+        const sort=req.query.sort;
+        const search=req.query.search;
+        console.log('sort: ',sort);
+        console.log('Search: ',search);
+
+       // const query={}
+       // const query={price: {$gt:50, $lte:150} }
+       const query={
+        title:{$regex: search, $options: 'i'}
+       }
+        const options = {
+          // sort returned documents in ascending order by title (A->Z)
+          sort: { 
+            "price": sort==='asc'? 1 : -1
+           },
+        };
+        const result=await serviceCollection.find(query,options).toArray()
         res.send(result)
     })
 
